@@ -1,12 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fpdart/fpdart.dart';
-import 'package:http/http.dart';
-import 'package:http/http.dart';
-import 'package:http/http.dart';
 import 'package:http/http.dart';
 
 import '../utils/config.dart';

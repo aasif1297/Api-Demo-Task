@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/main.dart';
+import 'package:flutter_application_1/res/endpoints.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart';
@@ -25,11 +26,12 @@ class _MyHomePageState extends ConsumerState<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    // Initialize the Future when the widget is created
-    _dataFuture = ref.read(networkRepoProvider).getRequest(
-          url: 'https://dummyjson.com/recipes',
-          requireAuth: false,
-        );
+    getDataFromApi();
+  }
+
+  getDataFromApi() {
+    _dataFuture =
+        ref.read(networkRepoProvider).getRequest(url: EndPoints.recipes);
   }
 
   @override
@@ -69,8 +71,11 @@ class _MyHomePageState extends ConsumerState<MyHomePage> {
                 return const CircularProgressIndicator();
               }
 
-              return const Text(
-                'Enter button to call the api',
+              return GestureDetector(
+                onTap: () => getDataFromApi(),
+                child: const Text(
+                  'Fetch Data',
+                ),
               );
             }),
       ),
