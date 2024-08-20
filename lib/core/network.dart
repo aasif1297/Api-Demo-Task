@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart';
@@ -11,6 +12,7 @@ import 'package:http/http.dart';
 import '../utils/config.dart';
 import '../res/strings.dart';
 import 'core.dart';
+import 'hive_cache_manager.dart';
 
 final networkRepoProvider = StateProvider((ref) {
   return NetworkRepo();
@@ -18,6 +20,8 @@ final networkRepoProvider = StateProvider((ref) {
 
 class NetworkRepo {
   NetworkRepo();
+
+  final HiveCache cache = HiveCache();
 
   String queryParameters(Map<String, String?>? params) {
     if (params != null) {
@@ -41,20 +45,46 @@ class NetworkRepo {
       "Content-Type": "application/json",
     };
 
+    // Check if the response is in the cache
+    final cachedData = cache.get(uri);
+    if (cachedData != null) {
+      if (cachedData.eTag != null) {
+        requestHeaders["If-None-Match"] = cachedData.eTag!;
+      } else if (cachedData.lastModified != null) {
+        requestHeaders["If-Modified-Since"] = cachedData.lastModified!;
+      }
+
+      // Check internet connectivity
+      final connectivityResult = await Connectivity().checkConnectivity();
+      if (connectivityResult == ConnectivityResult.none) {
+        // No internet connection and no cached data, return an error
+        return Right(cachedData.toHttpResponse());
+      }
+    }
+
     int retryCount = 0;
 
     while (retryCount < maxRetries) {
       try {
-        final response = await get(Uri.parse(uri), headers: requestHeaders);
+        final response = await get(Uri.parse(uri), headers: requestHeaders)
+            .timeout(timeoutDuration);
+
         log('RESPONSE : ${response.body}', name: LogLabel.httpGet);
-        if (response.statusCode != 200) {
+        if (response.statusCode == 304 && cachedData != null) {
+          // Data hasn't changed; return the cached data
+          log('CACHE HIT: Server returned 304 Not Modified for $uri',
+              name: LogLabel.httpGet);
+          return Right(cachedData.toHttpResponse());
+        } else if (response.statusCode == 200) {
+          // Data has changed; update the cache
+          cache.set(uri, response);
+          return Right(response);
+        } else {
           return Left(Failure(
-            message: 'Request failed with status code ${response.statusCode}',
-            stackTrace: StackTrace.current,
-          ));
+              message: 'Unexpected status code: ${response.statusCode}',
+              stackTrace: StackTrace.current));
         }
-        return Right(response);
-      } on TimeoutException catch (e) {
+      } on TimeoutException {
         retryCount++;
         if (retryCount >= maxRetries) {
           if (AppConfig.logHttp) {
